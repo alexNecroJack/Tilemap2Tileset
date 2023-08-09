@@ -86,6 +86,8 @@ onready var progress : ProgressBar = $Lowerbar/VBoxContainer/ProgressBar
 # input image
 onready var inputImage : Polygon2D = $Body/VBoxContainer/Panel/inputImage
 
+onready var inputImageZoom : float = 1;
+
 # url
 onready var urlLine : LineEdit = $Body/VBoxContainer/Panel/LineEdit
 
@@ -110,6 +112,9 @@ func _ready() -> void:
 		_define_js()
 	
 	_on_Load()
+	
+	if OS.has_feature('pc') and OS.get_name() != "HTML5":
+		OS.set_window_maximized(true)
 	
 func _process(_delta: float) -> void:
 	if zoomSlider.value >= 0.25 && zoomSlider.value <=10 && onModalPic:
@@ -240,6 +245,11 @@ func load_image():
 	inputImage.material.set_shader_param("imgH", endOffsetY.value)
 	
 	inputImage.texture = currentImage
+	var tmp_parent = inputImage.get_parent();
+	inputImage.texture_offset.x = inputImage.texture.get_width() / 2 - tmp_parent.rect_size.x/2
+	inputImage.texture_offset.y = inputImage.texture.get_height() / 2 - tmp_parent.rect_size.y/2
+	inputImage.material.set_shader_param("zoomFactor", 1)
+	
 	inputImage.visible = true
 	fileDialogButton.visible = false
 	$Body/VBoxContainer/Panel/urlSubmit.visible = false
@@ -271,11 +281,28 @@ func _input(event: InputEvent) -> void:
 			offset.x += -motion.x
 			offset.y += -motion.y
 			
-			if offset.x > 0 and offset.x < inputImage.texture.get_width() - 1035:
-				inputImage.texture_offset.x = offset.x
+			var effectiveWidth = inputImage.texture.get_width() * inputImage.material.get_shader_param("zoomFactor");
+			var effectiveHeight = inputImage.texture.get_height() * inputImage.material.get_shader_param("zoomFactor");
 			
-			if offset.y < inputImage.texture.get_height() - 250 and offset.y > 0:
-				inputImage.texture_offset.y = offset.y
+			var tmp_parent = inputImage.get_parent();
+			
+			var maxOX = max(0, effectiveWidth - tmp_parent.rect_size.x);
+			var minOX = min(0, effectiveWidth - tmp_parent.rect_size.x);
+			inputImage.texture_offset.x = clamp(offset.x, minOX, maxOX);
+			
+			var maxOY = max(0, effectiveHeight - tmp_parent.rect_size.y);
+			var minOY = min(0, effectiveHeight - tmp_parent.rect_size.y);
+			inputImage.texture_offset.y = clamp(offset.y, minOY, maxOY)
+		
+		elif event is InputEventMouseButton and event.is_pressed() and event.button_index == BUTTON_WHEEL_UP and onPic and !_dragging and !running:
+			# zoom in
+			# zoom_pos = get_global_mouse_position()
+			inputImage.material.set_shader_param("zoomFactor", min(10, inputImage.material.get_shader_param("zoomFactor") + 0.1))
+			
+		elif event is InputEventMouseButton and event.is_pressed() and event.button_index == BUTTON_WHEEL_DOWN and onPic  and !_dragging and !running:
+			# zoom out
+			# zoom_pos = get_global_mouse_position()
+			inputImage.material.set_shader_param("zoomFactor", max(0.1, inputImage.material.get_shader_param("zoomFactor") - 0.1))
 			
 		else:
 			_dragging = false
@@ -327,6 +354,10 @@ func _on_files_dropped(files, _screen):
 		inputImage.material.set_shader_param("imgH", endOffsetY.value)
 		
 		inputImage.texture = currentImage
+		var tmp_parent = inputImage.get_parent();
+		inputImage.texture_offset.x = inputImage.texture.get_width() / 2 - tmp_parent.rect_size.x/2
+		inputImage.texture_offset.y = inputImage.texture.get_height() / 2 - tmp_parent.rect_size.y/2
+		inputImage.material.set_shader_param("zoomFactor", 1)
 		inputImage.visible = true
 		fileDialogButton.visible = false
 		$Body/VBoxContainer/Panel/urlSubmit.visible = false
@@ -356,6 +387,10 @@ func _on_FileDialog_file_selected(path: String) -> void:
 		inputImage.material.set_shader_param("imgH", endOffsetY.value)
 		
 		inputImage.texture = currentImage
+		var tmp_parent = inputImage.get_parent();
+		inputImage.texture_offset.x = inputImage.texture.get_width() / 2 - tmp_parent.rect_size.x/2
+		inputImage.texture_offset.y = inputImage.texture.get_height() / 2 - tmp_parent.rect_size.y/2
+		inputImage.material.set_shader_param("zoomFactor", 1)
 		inputImage.visible = true
 		fileDialogButton.visible = false
 		$Body/VBoxContainer/Panel/urlSubmit.visible = false
@@ -533,6 +568,10 @@ func _http_request_completed(_result, _response_code, _headers, body):
 	inputImage.material.set_shader_param("imgH", endOffsetY.value)
 
 	inputImage.texture = texture
+	var tmp_parent = inputImage.get_parent();
+	inputImage.texture_offset.x = inputImage.texture.get_width() / 2 - tmp_parent.rect_size.x/2
+	inputImage.texture_offset.y = inputImage.texture.get_height() / 2 - tmp_parent.rect_size.y/2
+	inputImage.material.set_shader_param("zoomFactor", 1)
 	inputImage.visible = true
 	fileDialogButton.visible = false
 	$Body/VBoxContainer/Panel/urlSubmit.visible = false
@@ -623,6 +662,9 @@ func _on_DeleteTiledImages_pressed() -> void:
 func _on_RemovePreviewImage_pressed() -> void:
 	imgLoaded = false
 	inputImage.texture = null
+	inputImage.texture_offset.x = 0
+	inputImage.texture_offset.y = 0
+	inputImage.material.set_shader_param("zoomFactor", 1)
 	inputImage.visible = false
 	fileDialogButton.visible = true
 	modalImage.texture = null
@@ -767,7 +809,7 @@ func _reset_settings() -> void:
 	else:
 		endOffsetX.value = 0
 		endOffsetY.value = 0
-
+	
 	inputImage.material.set_shader_param("imgW", endOffsetX.value)
 	inputImage.material.set_shader_param("imgH", endOffsetY.value)
 
